@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -103,7 +104,7 @@ class MainActivity : AppCompatActivity() {
         viewModel.beginMerge()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         mergeEngine.merge(
-            viewModel.state.value.queue.items.map { Uri.parse(it.uri) },
+            viewModel.state.value.queue.items.map { it.uri.toUri() },
             temporaryOutput!!,
             object : MergeListener {
                 override fun onProgress(percent: Int) {
@@ -192,7 +193,7 @@ class MainActivity : AppCompatActivity() {
         binding.audioList.removeAllViews()
         state.queue.items.forEachIndexed { index, audio ->
             val row = ItemAudioBinding.inflate(layoutInflater, binding.audioList, false)
-            row.orderText.text = (index + 1).toString()
+            row.orderText.text = getString(R.string.order_number, index + 1)
             row.nameText.text = audio.name
             row.durationText.text = DurationText.format(audio.durationMs)
             row.moveUpButton.isEnabled = idle && index > 0

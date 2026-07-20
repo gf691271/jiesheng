@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- Versions are intentionally pinned to the compileSdk 35 toolchain. -->
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="OldTargetApi" severity="ignore" />
+    <!-- Adaptive icon XML requires a v26 resource qualifier even when minSdk is 26. -->
+    <issue id="ObsoleteSdkInt" severity="ignore" />
+    <!-- The monochrome layer is supplied by the v33 adaptive-icon override. -->
+    <issue id="MonochromeLauncherIcon" severity="ignore" />
+</lint>

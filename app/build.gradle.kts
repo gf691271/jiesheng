@@ -1,5 +1,9 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+val releaseStorePath = providers.environmentVariable("JIESHENG_KEYSTORE").orNull
+val releaseStorePassword = providers.environmentVariable("JIESHENG_STORE_PASSWORD").orNull
+val releaseKeyPassword = providers.environmentVariable("JIESHENG_KEY_PASSWORD").orNull
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -17,6 +21,24 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (releaseStorePath != null && releaseStorePassword != null && releaseKeyPassword != null) {
+            create("release") {
+                storeFile = file(releaseStorePath)
+                storePassword = releaseStorePassword
+                keyAlias = "jiesheng"
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.findByName("release")
+            isMinifyEnabled = false
+        }
     }
 
     buildFeatures {

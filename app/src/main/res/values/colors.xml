@@ -7,4 +7,5 @@
     <color name="surface_soft">#FFFFF1EA</color>
     <color name="text_secondary">#75645D</color>
     <color name="border">#FFE5D8D1</color>
+    <color name="icon_background">#241B18</color>
 </resources>
