@@ -1,0 +1,8 @@
+.gradle/
+.idea/
+.worktrees/
+local.properties
+**/build/
+*.iml
+artifacts/*.apk
+artifacts/*.sha256
