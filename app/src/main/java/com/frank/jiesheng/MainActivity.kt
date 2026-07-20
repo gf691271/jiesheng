@@ -1,14 +1,21 @@
 package com.frank.jiesheng
 
+import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.DocumentsContract
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -32,8 +39,36 @@ class MainActivity : AppCompatActivity() {
     private var targetUri: Uri? = null
     private var targetName: String = ""
 
+    private val requestMusicPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            launchMusicLibrary()
+        } else {
+            Toast.makeText(this, R.string.music_permission_denied, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val musicLibraryResult = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uris = result.data
+                ?.getStringArrayListExtra(MediaLibraryActivity.EXTRA_SELECTED_MEDIA_URIS)
+                .orEmpty()
+                .map(Uri::parse)
+            readSelectedDocuments(uris, SourceType.AUDIO)
+        }
+    }
+
+    private val pickVideos = registerForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(MAX_ITEMS),
+    ) { uris ->
+        readSelectedDocuments(uris, SourceType.VIDEO)
+    }
+
     private val openAudio = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) {
-        uris -> readSelectedDocuments(uris)
+        uris -> readSelectedDocuments(uris, SourceType.AUDIO)
     }
 
     private val createOutput = registerForActivityResult(
@@ -53,7 +88,11 @@ class MainActivity : AppCompatActivity() {
         metadataReader = DocumentMetadataReader(applicationContext)
         mergeEngine = Media3AudioMergeEngine(applicationContext)
 
-        binding.addButton.setOnClickListener { openAudio.launch(arrayOf("audio/*")) }
+        binding.musicLibraryButton.setOnClickListener { openMusicLibrary() }
+        binding.galleryButton.setOnClickListener {
+            pickVideos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+        }
+        binding.folderButton.setOnClickListener { openAudio.launch(arrayOf("audio/*")) }
         binding.mergeButton.setOnClickListener {
             viewModel.startExport()
             targetName = ExportNames.m4a(Instant.now(), ZoneId.systemDefault())
@@ -78,20 +117,45 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun readSelectedDocuments(uris: List<Uri>) {
+    private fun openMusicLibrary() {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) {
+            launchMusicLibrary()
+        } else {
+            requestMusicPermission.launch(permission)
+        }
+    }
+
+    private fun launchMusicLibrary() {
+        musicLibraryResult.launch(
+            Intent(this, MediaLibraryActivity::class.java).putExtra(
+                MediaLibraryActivity.EXTRA_REMAINING_CAPACITY,
+                MAX_ITEMS - viewModel.state.value.queue.items.size,
+            ),
+        )
+    }
+
+    private fun readSelectedDocuments(uris: List<Uri>, sourceType: SourceType) {
         if (uris.isEmpty()) return
         val existing = viewModel.state.value.queue.items.map { it.uri }.toSet()
         val newUris = uris.distinctBy(Uri::toString).filterNot { it.toString() in existing }
-        if (existing.size + newUris.size > 3) {
+        if (existing.size + newUris.size > MAX_ITEMS) {
             Toast.makeText(this, R.string.limit_message, Toast.LENGTH_SHORT).show()
             return
         }
         lifecycleScope.launch {
             try {
                 val selected = withContext(Dispatchers.IO) {
-                    newUris.map(metadataReader::read)
+                    newUris.map { metadataReader.read(it, sourceType) }
                 }
                 viewModel.addAll(selected)
+            } catch (_: NoAudioTrackException) {
+                Toast.makeText(this@MainActivity, R.string.video_has_no_audio, Toast.LENGTH_LONG)
+                    .show()
             } catch (_: UnreadableAudioException) {
                 Toast.makeText(this@MainActivity, R.string.read_failed, Toast.LENGTH_LONG).show()
             }
@@ -185,17 +249,18 @@ class MainActivity : AppCompatActivity() {
     private fun render(state: MainUiState) {
         val idle = state.phase == MergePhase.Idle
         binding.emptyState.visibility = if (state.queue.items.isEmpty()) View.VISIBLE else View.GONE
-        binding.addButton.text = getString(
-            if (state.queue.items.isEmpty()) R.string.choose_audio else R.string.add_audio,
-        )
-        binding.addButton.isEnabled = idle && state.queue.items.size < 3
+        val sourcesEnabled = idle && state.queue.items.size < MAX_ITEMS
+        binding.musicLibraryButton.isEnabled = sourcesEnabled
+        binding.galleryButton.isEnabled = sourcesEnabled
+        binding.folderButton.isEnabled = sourcesEnabled
         binding.mergeButton.isEnabled = state.isMergeEnabled
         binding.audioList.removeAllViews()
         state.queue.items.forEachIndexed { index, audio ->
             val row = ItemAudioBinding.inflate(layoutInflater, binding.audioList, false)
             row.orderText.text = getString(R.string.order_number, index + 1)
             row.nameText.text = audio.name
-            row.durationText.text = DurationText.format(audio.durationMs)
+            row.detailText.text = AudioText.detail(audio)
+            row.modifiedText.text = AudioText.modified(audio.lastModifiedEpochMs, ZoneId.systemDefault())
             row.moveUpButton.isEnabled = idle && index > 0
             row.moveDownButton.isEnabled = idle && index < state.queue.items.lastIndex
             row.removeButton.isEnabled = idle
@@ -223,5 +288,9 @@ class MainActivity : AppCompatActivity() {
             is MergePhase.Completed -> binding.progressGroup.visibility = View.GONE
             is MergePhase.Failed -> binding.progressGroup.visibility = View.GONE
         }
+    }
+
+    private companion object {
+        const val MAX_ITEMS = 20
     }
 }

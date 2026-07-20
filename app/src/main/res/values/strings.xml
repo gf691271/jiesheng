@@ -1,13 +1,11 @@
 <resources>
     <string name="app_name">接声</string>
     <string name="headline">把几段声音，接成一段</string>
-    <string name="subtitle">选择 2–3 个音频，排好顺序，导出 M4A。</string>
-    <string name="privacy_note">全程离线 · 不读取其他文件</string>
+    <string name="subtitle">选择 2–20 段音频或视频中的声音，排好顺序，导出 M4A。</string>
+    <string name="privacy_note">全程离线 · 仅访问你选择或授权的媒体</string>
     <string name="selected_audio">已选音频</string>
     <string name="empty_hint">还没有音频</string>
-    <string name="empty_detail">先从手机文件中选择 2–3 段录音</string>
-    <string name="choose_audio">选择音频</string>
-    <string name="add_audio">继续添加</string>
+    <string name="empty_detail">从音乐库、相册或文件夹添加 2–20 段素材</string>
     <string name="merge_export">合并并导出</string>
     <string name="cancel">取消</string>
     <string name="choosing_destination">请选择保存位置…</string>
@@ -16,7 +14,7 @@
     <string name="export_failed">合并失败：%1$s</string>
     <string name="read_failed">无法读取这个音频，请换一个文件</string>
     <string name="write_failed">无法保存文件，请换一个位置</string>
-    <string name="limit_message">最多只能选择 3 个音频</string>
+    <string name="limit_message">最多只能选择 20 个音频</string>
     <string name="move_up">上移</string>
     <string name="move_down">下移</string>
     <string name="remove">删除</string>
@@ -25,6 +23,10 @@
     <string name="down_arrow">↓</string>
     <string name="remove_symbol">×</string>
     <string name="music_library">音乐库</string>
+    <string name="gallery">相册</string>
+    <string name="folder">文件夹</string>
+    <string name="music_permission_denied">未授权读取音乐库，仍可从相册或文件夹选择</string>
+    <string name="video_has_no_audio">该视频没有可用音轨</string>
     <string name="media_folder_summary">%1$s\n%2$s · %3$d 个音频</string>
     <string name="confirm_media_selection">添加所选</string>
     <string name="media_selection_limit">最多还能选择 %1$d 个音频</string>
