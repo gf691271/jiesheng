@@ -4,7 +4,9 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import androidx.annotation.OptIn
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
@@ -23,6 +25,7 @@ interface MergeListener {
     fun onError(error: Throwable)
 }
 
+@OptIn(markerClass = [UnstableApi::class])
 class Media3AudioMergeEngine(context: Context) : AudioMergeEngine {
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())

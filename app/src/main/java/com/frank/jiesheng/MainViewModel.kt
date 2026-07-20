@@ -33,7 +33,15 @@ class MainViewModel : ViewModel() {
     val messages: SharedFlow<String> = mutableMessages.asSharedFlow()
 
     fun add(item: SelectedAudio) {
-        when (val change = mutableState.value.queue.add(item)) {
+        applyQueueChange(mutableState.value.queue.add(item))
+    }
+
+    fun addAll(items: List<SelectedAudio>) {
+        applyQueueChange(mutableState.value.queue.addAll(items))
+    }
+
+    private fun applyQueueChange(change: QueueChange) {
+        when (change) {
             is QueueChange.Updated -> mutableState.update { it.copy(queue = change.queue) }
             QueueChange.Duplicate -> mutableMessages.tryEmit("这个音频已经添加过了")
             QueueChange.LimitReached -> mutableMessages.tryEmit("最多只能选择 3 个音频")

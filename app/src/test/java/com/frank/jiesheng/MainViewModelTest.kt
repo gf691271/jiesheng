@@ -86,4 +86,20 @@ class MainViewModelTest {
         viewModel.remove(first.uri)
         assertEquals(listOf(third, second), viewModel.state.value.queue.items)
     }
+
+    @Test
+    fun `batch over limit leaves existing selection untouched`() = runTest {
+        val viewModel = MainViewModel()
+        val messages = mutableListOf<String>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.messages.take(1).toList(messages)
+        }
+        viewModel.add(first)
+        viewModel.add(second)
+
+        viewModel.addAll(listOf(third, fourth))
+
+        assertEquals(listOf(first, second), viewModel.state.value.queue.items)
+        assertEquals(listOf("最多只能选择 3 个音频"), messages)
+    }
 }

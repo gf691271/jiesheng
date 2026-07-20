@@ -9,10 +9,17 @@ data class SelectedAudio(
 data class AudioQueue(
     val items: List<SelectedAudio> = emptyList(),
 ) {
-    fun add(item: SelectedAudio): QueueChange = when {
-        items.any { it.uri == item.uri } -> QueueChange.Duplicate
-        items.size >= MAX_ITEMS -> QueueChange.LimitReached
-        else -> QueueChange.Updated(copy(items = items + item))
+    fun add(item: SelectedAudio): QueueChange = addAll(listOf(item))
+
+    fun addAll(newItems: List<SelectedAudio>): QueueChange {
+        val additions = newItems.distinctBy { it.uri }.filterNot { candidate ->
+            items.any { existing -> existing.uri == candidate.uri }
+        }
+        return when {
+            additions.isEmpty() -> QueueChange.Duplicate
+            items.size + additions.size > MAX_ITEMS -> QueueChange.LimitReached
+            else -> QueueChange.Updated(copy(items = items + additions))
+        }
     }
 
     fun moveUp(index: Int): AudioQueue = move(index, index - 1)

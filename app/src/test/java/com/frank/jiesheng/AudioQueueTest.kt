@@ -53,4 +53,22 @@ class AudioQueueTest {
 
         assertEquals(listOf(first, third), queue.remove(second.uri).items)
     }
+
+    @Test
+    fun `batch over limit is rejected without a partial update`() {
+        val queue = AudioQueue(listOf(first, second))
+
+        assertSame(QueueChange.LimitReached, queue.addAll(listOf(third, fourth)))
+        assertEquals(listOf(first, second), queue.items)
+    }
+
+    @Test
+    fun `batch ignores duplicate URIs and appends new items in order`() {
+        val queue = AudioQueue(listOf(first))
+
+        val result = queue.addAll(listOf(first.copy(name = "副本"), second, third))
+            as QueueChange.Updated
+
+        assertEquals(listOf(first, second, third), result.queue.items)
+    }
 }
