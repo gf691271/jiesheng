@@ -11,8 +11,8 @@
 - Certificate SHA-256: `E4:5E:49:B4:87:A0:43:3D:0B:DB:FB:4E:5C:5C:CB:68:83:9D:8F:B0:F5:C8:B9:2E:EB:34:E3:A1:DD:AC:5F:DB`
 - Certificate validity: 2026-07-20 through 2053-12-05
 - Local assets: `jiesheng-v0.2.0.apk` and `jiesheng-v0.2.0.apk.sha256`
-- APK SHA-256: `d3b7af1ae1e112e7a721586058744de8c78a450058e26f936c24b37693221500`
-- Publication status: deferred until the complete `feature/v0.2` branch passes final review
+- APK SHA-256: `93d1c326ee412880cbef741a281bb1b07ff823e3934413d4ecc1f6569846fa46`
+- Publication: GitHub tag and Release `v0.2.0`
 
 ## User-visible changes
 
