@@ -1,6 +1,5 @@
 package com.frank.jiesheng
 
-import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
@@ -9,10 +8,13 @@ import androidx.test.espresso.matcher.ViewMatchers.isEnabled
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.frank.jiesheng.databinding.ActivityMainBinding
+import com.frank.jiesheng.databinding.ItemAudioBinding
 import java.time.Instant
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.hamcrest.Matchers.not
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,6 +38,31 @@ class MainActivityTest {
     }
 
     @Test
+    fun allSourceButtonsStayEnabledAtCapacityWhileIdle() {
+        val items = (1..20).map { index ->
+            SelectedAudio(
+                uri = "content://audio/$index",
+                name = "$index.m4a",
+                durationMs = 1_000,
+                formatLabel = "M4A",
+                sourceType = SourceType.AUDIO,
+                lastModifiedEpochMs = index.toLong(),
+            )
+        }
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val binding = ActivityMainBinding.inflate(activity.layoutInflater)
+
+                binding.bindSourceAvailability(MainUiState(queue = AudioQueue(items)))
+
+                assertTrue(binding.musicLibraryButton.isEnabled)
+                assertTrue(binding.galleryButton.isEnabled)
+                assertTrue(binding.folderButton.isEnabled)
+            }
+        }
+    }
+
+    @Test
     fun audioCardShowsCompleteFilenameSourceDurationAndExactModifiedTime() {
         val filename = "2026-07-20_这是一个很长很长而且需要完整显示不能用省略号截断的采访录音文件名.mp4"
         val item = SelectedAudio(
@@ -48,20 +75,15 @@ class MainActivityTest {
         )
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                val row = activity.layoutInflater.inflate(R.layout.item_audio, null)
-                val nameText = row.findViewById<TextView>(R.id.nameText)
-                val detailText = row.findViewById<TextView>(R.id.detailText)
-                val modifiedText = row.findViewById<TextView>(R.id.modifiedText)
+                val binding = ItemAudioBinding.inflate(activity.layoutInflater)
 
-                nameText.text = item.name
-                detailText.text = AudioText.detail(item)
-                modifiedText.text = AudioText.modified(item.lastModifiedEpochMs, ZoneId.of("UTC"))
+                binding.bindMetadata(item, ZoneId.of("UTC"))
 
-                assertEquals(filename, nameText.text.toString())
-                assertEquals(Int.MAX_VALUE, nameText.maxLines)
-                assertNull(nameText.ellipsize)
-                assertEquals("MP4（取音频）· 12:36", detailText.text.toString())
-                assertEquals("修改于 2026-07-20 14:36:08", modifiedText.text.toString())
+                assertEquals(filename, binding.nameText.text.toString())
+                assertEquals(Int.MAX_VALUE, binding.nameText.maxLines)
+                assertNull(binding.nameText.ellipsize)
+                assertEquals("MP4（取音频）· 12:36", binding.detailText.text.toString())
+                assertEquals("修改于 2026-07-20 14:36:08", binding.modifiedText.text.toString())
             }
         }
     }

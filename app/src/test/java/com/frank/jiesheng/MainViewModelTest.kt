@@ -38,6 +38,19 @@ class MainViewModelTest {
     }
 
     @Test
+    fun `source entrances remain enabled at capacity while idle`() {
+        val fullQueue = AudioQueue((1..20).map(::item))
+
+        assertTrue(MainUiState(queue = fullQueue).areSourcesEnabled)
+        assertFalse(
+            MainUiState(
+                queue = fullQueue,
+                phase = MergePhase.ChoosingDestination,
+            ).areSourcesEnabled,
+        )
+    }
+
+    @Test
     fun `duplicate and limit selections emit Chinese messages`() = runTest {
         val viewModel = MainViewModel()
         val messages = mutableListOf<String>()

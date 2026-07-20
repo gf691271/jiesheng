@@ -249,18 +249,13 @@ class MainActivity : AppCompatActivity() {
     private fun render(state: MainUiState) {
         val idle = state.phase == MergePhase.Idle
         binding.emptyState.visibility = if (state.queue.items.isEmpty()) View.VISIBLE else View.GONE
-        val sourcesEnabled = idle && state.queue.items.size < MAX_ITEMS
-        binding.musicLibraryButton.isEnabled = sourcesEnabled
-        binding.galleryButton.isEnabled = sourcesEnabled
-        binding.folderButton.isEnabled = sourcesEnabled
+        binding.bindSourceAvailability(state)
         binding.mergeButton.isEnabled = state.isMergeEnabled
         binding.audioList.removeAllViews()
         state.queue.items.forEachIndexed { index, audio ->
             val row = ItemAudioBinding.inflate(layoutInflater, binding.audioList, false)
             row.orderText.text = getString(R.string.order_number, index + 1)
-            row.nameText.text = audio.name
-            row.detailText.text = AudioText.detail(audio)
-            row.modifiedText.text = AudioText.modified(audio.lastModifiedEpochMs, ZoneId.systemDefault())
+            row.bindMetadata(audio, ZoneId.systemDefault())
             row.moveUpButton.isEnabled = idle && index > 0
             row.moveDownButton.isEnabled = idle && index < state.queue.items.lastIndex
             row.removeButton.isEnabled = idle
@@ -293,4 +288,16 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val MAX_ITEMS = 20
     }
+}
+
+internal fun ActivityMainBinding.bindSourceAvailability(state: MainUiState) {
+    musicLibraryButton.isEnabled = state.areSourcesEnabled
+    galleryButton.isEnabled = state.areSourcesEnabled
+    folderButton.isEnabled = state.areSourcesEnabled
+}
+
+internal fun ItemAudioBinding.bindMetadata(item: SelectedAudio, zoneId: ZoneId) {
+    nameText.text = item.name
+    detailText.text = AudioText.detail(item)
+    modifiedText.text = AudioText.modified(item.lastModifiedEpochMs, zoneId)
 }

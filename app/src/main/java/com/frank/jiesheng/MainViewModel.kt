@@ -13,6 +13,9 @@ data class MainUiState(
     val queue: AudioQueue = AudioQueue(),
     val phase: MergePhase = MergePhase.Idle,
 ) {
+    val areSourcesEnabled: Boolean
+        get() = phase == MergePhase.Idle
+
     val isMergeEnabled: Boolean
         get() = queue.items.size >= 2 && phase == MergePhase.Idle
 }
