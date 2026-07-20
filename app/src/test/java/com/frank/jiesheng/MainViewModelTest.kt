@@ -13,13 +13,17 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelTest {
-    private val first = SelectedAudio("content://audio/1", "一.m4a", 1_000)
-    private val second = SelectedAudio("content://audio/2", "二.mp3", 2_000)
-    private val third = SelectedAudio("content://audio/3", "三.wav", 3_000)
-    private val fourth = SelectedAudio("content://audio/4", "四.ogg", 4_000)
+    private val first = item(1)
+    private val second = item(2)
+    private val third = item(3)
+    private val fourth = item(4)
+
+    private fun item(id: Int) = SelectedAudio(
+        "content://audio/$id", "$id.m4a", 1_000, "M4A", SourceType.AUDIO, id.toLong(),
+    )
 
     @Test
-    fun `merge is enabled only with two or three items while idle`() {
+    fun `merge is enabled with at least two items while idle`() {
         val viewModel = MainViewModel()
 
         assertFalse(viewModel.state.value.isMergeEnabled)
@@ -43,11 +47,10 @@ class MainViewModelTest {
 
         viewModel.add(first)
         viewModel.add(first.copy(name = "副本.m4a"))
-        viewModel.add(second)
-        viewModel.add(third)
-        viewModel.add(fourth)
+        viewModel.addAll((2..20).map(::item))
+        viewModel.add(item(21))
 
-        assertEquals(listOf("这个音频已经添加过了", "最多只能选择 3 个音频"), messages)
+        assertEquals(listOf("这个音频已经添加过了", "最多只能选择 20 个音频"), messages)
     }
 
     @Test
@@ -94,12 +97,11 @@ class MainViewModelTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.messages.take(1).toList(messages)
         }
-        viewModel.add(first)
-        viewModel.add(second)
+        viewModel.addAll((1..19).map(::item))
 
-        viewModel.addAll(listOf(third, fourth))
+        viewModel.addAll(listOf(item(20), item(21)))
 
-        assertEquals(listOf(first, second), viewModel.state.value.queue.items)
-        assertEquals(listOf("最多只能选择 3 个音频"), messages)
+        assertEquals(19, viewModel.state.value.queue.items.size)
+        assertEquals(listOf("最多只能选择 20 个音频"), messages)
     }
 }

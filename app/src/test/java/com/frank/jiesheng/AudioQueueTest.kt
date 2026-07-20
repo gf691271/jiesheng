@@ -5,10 +5,14 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 
 class AudioQueueTest {
-    private val first = SelectedAudio("content://audio/1", "一.m4a", 1_000)
-    private val second = SelectedAudio("content://audio/2", "二.mp3", 2_000)
-    private val third = SelectedAudio("content://audio/3", "三.wav", 3_000)
-    private val fourth = SelectedAudio("content://audio/4", "四.ogg", 4_000)
+    private val first = item(1, 1_000)
+    private val second = item(2, 2_000)
+    private val third = item(3, 3_000)
+    private val fourth = item(4, 4_000)
+
+    private fun item(id: Int, modified: Long?) = SelectedAudio(
+        "content://audio/$id", "$id.m4a", 1_000, "M4A", SourceType.AUDIO, modified,
+    )
 
     @Test
     fun `add appends a new audio item`() {
@@ -25,10 +29,19 @@ class AudioQueueTest {
     }
 
     @Test
-    fun `add reports limit when a fourth distinct item is selected`() {
-        val queue = AudioQueue(listOf(first, second, third))
+    fun `new items sort oldest first with unknown dates last`() {
+        val result = AudioQueue().addAll(listOf(item(3, null), item(2, 2_000), item(1, 1_000)))
+            as QueueChange.Updated
 
-        assertSame(QueueChange.LimitReached, queue.add(fourth))
+        assertEquals(listOf("1.m4a", "2.m4a", "3.m4a"), result.queue.items.map { it.name })
+    }
+
+    @Test
+    fun `twentieth item is accepted and twenty first is rejected atomically`() {
+        val full = (1..20).map { item(it, it.toLong()) }
+
+        assertEquals(20, (AudioQueue().addAll(full) as QueueChange.Updated).queue.items.size)
+        assertSame(QueueChange.LimitReached, AudioQueue(full).add(item(21, 21)))
     }
 
     @Test
@@ -56,10 +69,10 @@ class AudioQueueTest {
 
     @Test
     fun `batch over limit is rejected without a partial update`() {
-        val queue = AudioQueue(listOf(first, second))
+        val queue = AudioQueue((1..19).map { item(it, it.toLong()) })
 
-        assertSame(QueueChange.LimitReached, queue.addAll(listOf(third, fourth)))
-        assertEquals(listOf(first, second), queue.items)
+        assertSame(QueueChange.LimitReached, queue.addAll(listOf(item(20, 20), item(21, 21))))
+        assertEquals(19, queue.items.size)
     }
 
     @Test

@@ -18,7 +18,14 @@ class DocumentMetadataReader(private val context: Context) {
             retriever.release()
         }
         if (duration == null || duration <= 0) throw UnreadableAudioException(name)
-        return SelectedAudio(uri.toString(), name, duration)
+        return SelectedAudio(
+            uri = uri.toString(),
+            name = name,
+            durationMs = duration,
+            formatLabel = name.substringAfterLast('.', missingDelimiterValue = "").uppercase(),
+            sourceType = SourceType.AUDIO,
+            lastModifiedEpochMs = null,
+        )
     }
 
     private fun readDisplayName(uri: Uri): String {

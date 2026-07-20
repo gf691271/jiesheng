@@ -4,7 +4,12 @@ data class SelectedAudio(
     val uri: String,
     val name: String,
     val durationMs: Long,
+    val formatLabel: String,
+    val sourceType: SourceType,
+    val lastModifiedEpochMs: Long?,
 )
+
+enum class SourceType { AUDIO, VIDEO }
 
 data class AudioQueue(
     val items: List<SelectedAudio> = emptyList(),
@@ -18,7 +23,7 @@ data class AudioQueue(
         return when {
             additions.isEmpty() -> QueueChange.Duplicate
             items.size + additions.size > MAX_ITEMS -> QueueChange.LimitReached
-            else -> QueueChange.Updated(copy(items = items + additions))
+            else -> QueueChange.Updated(copy(items = chronological(items + additions)))
         }
     }
 
@@ -37,9 +42,12 @@ data class AudioQueue(
     }
 
     private companion object {
-        const val MAX_ITEMS = 3
+        const val MAX_ITEMS = 20
     }
 }
+
+private fun chronological(items: List<SelectedAudio>): List<SelectedAudio> =
+    items.sortedWith(compareBy(nullsLast()) { it.lastModifiedEpochMs })
 
 sealed interface QueueChange {
     data class Updated(val queue: AudioQueue) : QueueChange

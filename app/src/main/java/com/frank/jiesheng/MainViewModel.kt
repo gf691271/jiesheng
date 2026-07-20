@@ -14,7 +14,7 @@ data class MainUiState(
     val phase: MergePhase = MergePhase.Idle,
 ) {
     val isMergeEnabled: Boolean
-        get() = queue.items.size in 2..3 && phase == MergePhase.Idle
+        get() = queue.items.size >= 2 && phase == MergePhase.Idle
 }
 
 sealed interface MergePhase {
@@ -44,7 +44,7 @@ class MainViewModel : ViewModel() {
         when (change) {
             is QueueChange.Updated -> mutableState.update { it.copy(queue = change.queue) }
             QueueChange.Duplicate -> mutableMessages.tryEmit("这个音频已经添加过了")
-            QueueChange.LimitReached -> mutableMessages.tryEmit("最多只能选择 3 个音频")
+            QueueChange.LimitReached -> mutableMessages.tryEmit("最多只能选择 20 个音频")
         }
     }
 
