@@ -16,12 +16,16 @@ data class MainUiState(
     val areSourcesEnabled: Boolean
         get() = phase == MergePhase.Idle
 
+    val areQueueEditsEnabled: Boolean
+        get() = phase == MergePhase.Idle
+
     val isMergeEnabled: Boolean
         get() = queue.items.size >= 2 && phase == MergePhase.Idle
 }
 
 sealed interface MergePhase {
     data object Idle : MergePhase
+    data object ReadingSources : MergePhase
     data object ChoosingDestination : MergePhase
     data class Merging(val progress: Int) : MergePhase
     data class Completed(val fileName: String) : MergePhase
@@ -36,11 +40,35 @@ class MainViewModel : ViewModel() {
     val messages: SharedFlow<String> = mutableMessages.asSharedFlow()
 
     fun add(item: SelectedAudio) {
+        if (mutableState.value.phase != MergePhase.Idle) return
         applyQueueChange(mutableState.value.queue.add(item))
     }
 
     fun addAll(items: List<SelectedAudio>) {
+        if (mutableState.value.phase != MergePhase.Idle) return
         applyQueueChange(mutableState.value.queue.addAll(items))
+    }
+
+    fun beginSourceReading(candidateCount: Int): Boolean {
+        val current = mutableState.value
+        if (current.phase != MergePhase.Idle || candidateCount <= 0) return false
+        if (current.queue.items.size + candidateCount > 20) {
+            mutableMessages.tryEmit("最多只能选择 20 个音频")
+            return false
+        }
+        mutableState.value = current.copy(phase = MergePhase.ReadingSources)
+        return true
+    }
+
+    fun finishSourceReading(items: List<SelectedAudio>) {
+        val current = mutableState.value
+        if (current.phase != MergePhase.ReadingSources) return
+        val queue = when (val change = current.queue.addAll(items)) {
+            is QueueChange.Updated -> change.queue
+            QueueChange.Duplicate -> current.queue
+            QueueChange.LimitReached -> current.queue
+        }
+        mutableState.value = current.copy(queue = queue, phase = MergePhase.Idle)
     }
 
     private fun applyQueueChange(change: QueueChange) {
@@ -52,21 +80,24 @@ class MainViewModel : ViewModel() {
     }
 
     fun moveUp(index: Int) {
+        if (mutableState.value.phase != MergePhase.Idle) return
         mutableState.update { it.copy(queue = it.queue.moveUp(index)) }
     }
 
     fun moveDown(index: Int) {
+        if (mutableState.value.phase != MergePhase.Idle) return
         mutableState.update { it.copy(queue = it.queue.moveDown(index)) }
     }
 
     fun remove(uri: String) {
+        if (mutableState.value.phase != MergePhase.Idle) return
         mutableState.update { it.copy(queue = it.queue.remove(uri)) }
     }
 
-    fun startExport() {
-        if (mutableState.value.isMergeEnabled) {
-            mutableState.update { it.copy(phase = MergePhase.ChoosingDestination) }
-        }
+    fun startExport(): Boolean {
+        if (!mutableState.value.isMergeEnabled) return false
+        mutableState.update { it.copy(phase = MergePhase.ChoosingDestination) }
+        return true
     }
 
     fun beginMerge() {

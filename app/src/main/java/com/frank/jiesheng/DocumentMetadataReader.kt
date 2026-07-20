@@ -18,7 +18,7 @@ class DocumentMetadataReader(private val context: Context) {
         val duration = try {
             retriever.setDataSource(context, uri)
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-        } catch (error: RuntimeException) {
+        } catch (error: Exception) {
             throw UnreadableAudioException(name, error)
         } finally {
             retriever.release()
@@ -33,6 +33,24 @@ class DocumentMetadataReader(private val context: Context) {
             sourceType = sourceType,
             lastModifiedEpochMs = metadata.lastModifiedEpochMs,
         )
+    }
+
+    fun readAll(uris: List<Uri>, sourceType: SourceType): DocumentReadBatch {
+        val items = mutableListOf<SelectedAudio>()
+        val failures = mutableListOf<DocumentReadFailure>()
+        uris.forEach { uri ->
+            try {
+                items += read(uri, sourceType)
+            } catch (error: Exception) {
+                failures += DocumentReadFailure(
+                    name = (error as? NamedDocumentException)?.documentName
+                        ?: uri.lastPathSegment
+                        ?: "未命名媒体",
+                    reason = error.message ?: "无法读取音频",
+                )
+            }
+        }
+        return DocumentReadBatch(items, failures)
     }
 
     private fun readMetadata(uri: Uri): Metadata {
@@ -110,7 +128,7 @@ class DocumentMetadataReader(private val context: Context) {
                     .getString(android.media.MediaFormat.KEY_MIME)
                     ?.startsWith("audio/") == true
             }
-        } catch (error: RuntimeException) {
+        } catch (error: Exception) {
             throw UnreadableAudioException(name, error)
         } finally {
             extractor.release()
@@ -133,13 +151,27 @@ class DocumentMetadataReader(private val context: Context) {
     )
 }
 
+data class DocumentReadBatch(
+    val items: List<SelectedAudio>,
+    val failures: List<DocumentReadFailure>,
+)
+
+data class DocumentReadFailure(val name: String, val reason: String)
+
 private fun android.database.Cursor.stringAt(columnName: String): String? =
     getColumnIndex(columnName).takeIf { it >= 0 && !isNull(it) }?.let(::getString)
 
 private fun android.database.Cursor.longAt(columnName: String): Long? =
     getColumnIndex(columnName).takeIf { it >= 0 && !isNull(it) }?.let(::getLong)
 
-class UnreadableAudioException(name: String, cause: Throwable? = null) :
-    Exception("无法读取音频：$name", cause)
+sealed class NamedDocumentException(
+    val documentName: String,
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
 
-class NoAudioTrackException(name: String) : Exception("媒体不包含音轨：$name")
+class UnreadableAudioException(name: String, cause: Throwable? = null) :
+    NamedDocumentException(name, "无法读取音频：$name", cause)
+
+class NoAudioTrackException(name: String) :
+    NamedDocumentException(name, "媒体不包含音轨：$name")

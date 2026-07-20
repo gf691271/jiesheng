@@ -53,7 +53,7 @@ export JIESHENG_KEY_PASSWORD='local-secret'
 - Kotlin + 原生 Android Views
 - AndroidX ViewModel
 - [Media3 Transformer](https://github.com/androidx/media) 1.9.4
-- 单 Activity、单 app module、独立 `AudioMergeEngine` 边界
+- 两个 Activity（主界面与音乐库选择器）、单 app module、独立 `AudioMergeEngine` 边界
 
 Media3 1.9.4 是此项目 compileSdk 35 工具链可用的最新 1.9 系列补丁。1.10.1 已要求 compileSdk 36，因此未采用。
 

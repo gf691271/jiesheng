@@ -33,7 +33,7 @@ class MainViewModelTest {
         assertTrue(viewModel.state.value.isMergeEnabled)
         viewModel.add(third)
         assertTrue(viewModel.state.value.isMergeEnabled)
-        viewModel.startExport()
+        assertTrue(viewModel.startExport())
         assertFalse(viewModel.state.value.isMergeEnabled)
     }
 
@@ -116,5 +116,43 @@ class MainViewModelTest {
 
         assertEquals(19, viewModel.state.value.queue.items.size)
         assertEquals(listOf("最多只能选择 20 个音频"), messages)
+    }
+
+    @Test
+    fun `two item queue cannot export while reading sources and is mergeable after completion`() {
+        val viewModel = MainViewModel()
+        viewModel.addAll(listOf(first, second))
+
+        assertTrue(viewModel.beginSourceReading(1))
+        assertFalse(viewModel.state.value.areSourcesEnabled)
+        assertFalse(viewModel.state.value.areQueueEditsEnabled)
+        assertFalse(viewModel.state.value.isMergeEnabled)
+
+        assertFalse(viewModel.startExport())
+        viewModel.moveUp(1)
+
+        assertEquals(MergePhase.ReadingSources, viewModel.state.value.phase)
+        assertEquals(listOf(first, second), viewModel.state.value.queue.items)
+
+        viewModel.finishSourceReading(listOf(third))
+
+        assertEquals(MergePhase.Idle, viewModel.state.value.phase)
+        assertTrue(viewModel.state.value.isMergeEnabled)
+        assertEquals(listOf(first, second, third), viewModel.state.value.queue.items)
+    }
+
+    @Test
+    fun `stale source callback cannot change queue during export`() {
+        val viewModel = MainViewModel()
+        viewModel.addAll(listOf(first, second))
+        viewModel.startExport()
+
+        viewModel.add(third)
+        viewModel.addAll(listOf(third, fourth))
+        viewModel.finishSourceReading(listOf(third))
+        viewModel.remove(first.uri)
+
+        assertEquals(MergePhase.ChoosingDestination, viewModel.state.value.phase)
+        assertEquals(listOf(first, second), viewModel.state.value.queue.items)
     }
 }

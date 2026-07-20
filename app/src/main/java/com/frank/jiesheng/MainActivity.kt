@@ -89,9 +89,10 @@ class MainActivity : AppCompatActivity() {
         binding.galleryButton.setOnClickListener { openVideos.launch(arrayOf("video/*")) }
         binding.folderButton.setOnClickListener { openAudio.launch(arrayOf("audio/*")) }
         binding.mergeButton.setOnClickListener {
-            viewModel.startExport()
-            targetName = ExportNames.m4a(Instant.now(), ZoneId.systemDefault())
-            createOutput.launch(targetName)
+            if (viewModel.startExport()) {
+                targetName = ExportNames.m4a(Instant.now(), ZoneId.systemDefault())
+                createOutput.launch(targetName)
+            }
         }
         binding.cancelButton.setOnClickListener { cancelMerge() }
 
@@ -138,21 +139,23 @@ class MainActivity : AppCompatActivity() {
         if (uris.isEmpty()) return
         val existing = viewModel.state.value.queue.items.map { it.uri }.toSet()
         val newUris = uris.distinctBy(Uri::toString).filterNot { it.toString() in existing }
-        if (existing.size + newUris.size > MAX_ITEMS) {
-            Toast.makeText(this, R.string.limit_message, Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (!viewModel.beginSourceReading(newUris.size)) return
         lifecycleScope.launch {
+            var completed = false
             try {
-                val selected = withContext(Dispatchers.IO) {
-                    newUris.map { metadataReader.read(it, sourceType) }
+                val batch = withContext(Dispatchers.IO) {
+                    metadataReader.readAll(newUris, sourceType)
                 }
-                viewModel.addAll(selected)
-            } catch (_: NoAudioTrackException) {
-                Toast.makeText(this@MainActivity, R.string.video_has_no_audio, Toast.LENGTH_LONG)
-                    .show()
-            } catch (_: UnreadableAudioException) {
-                Toast.makeText(this@MainActivity, R.string.read_failed, Toast.LENGTH_LONG).show()
+                viewModel.finishSourceReading(batch.items)
+                completed = true
+                if (batch.failures.isNotEmpty()) {
+                    val details = batch.failures.joinToString("\n") { failure ->
+                        getString(R.string.read_failure_item, failure.name, failure.reason)
+                    }
+                    Toast.makeText(this@MainActivity, details, Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                if (!completed) viewModel.finishSourceReading(emptyList())
             }
         }
     }
@@ -242,7 +245,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun render(state: MainUiState) {
-        val idle = state.phase == MergePhase.Idle
+        val editable = state.areQueueEditsEnabled
         binding.emptyState.visibility = if (state.queue.items.isEmpty()) View.VISIBLE else View.GONE
         binding.bindSourceAvailability(state)
         binding.mergeButton.isEnabled = state.isMergeEnabled
@@ -251,9 +254,9 @@ class MainActivity : AppCompatActivity() {
             val row = ItemAudioBinding.inflate(layoutInflater, binding.audioList, false)
             row.orderText.text = getString(R.string.order_number, index + 1)
             row.bindMetadata(audio, ZoneId.systemDefault())
-            row.moveUpButton.isEnabled = idle && index > 0
-            row.moveDownButton.isEnabled = idle && index < state.queue.items.lastIndex
-            row.removeButton.isEnabled = idle
+            row.moveUpButton.isEnabled = editable && index > 0
+            row.moveDownButton.isEnabled = editable && index < state.queue.items.lastIndex
+            row.removeButton.isEnabled = editable
             row.moveUpButton.setOnClickListener { viewModel.moveUp(index) }
             row.moveDownButton.setOnClickListener { viewModel.moveDown(index) }
             row.removeButton.setOnClickListener { viewModel.remove(audio.uri) }
@@ -262,6 +265,12 @@ class MainActivity : AppCompatActivity() {
 
         when (val phase = state.phase) {
             MergePhase.Idle -> binding.progressGroup.visibility = View.GONE
+            MergePhase.ReadingSources -> {
+                binding.progressGroup.visibility = View.VISIBLE
+                binding.statusText.setText(R.string.reading_sources)
+                binding.progressBar.isIndeterminate = true
+                binding.cancelButton.visibility = View.GONE
+            }
             MergePhase.ChoosingDestination -> {
                 binding.progressGroup.visibility = View.VISIBLE
                 binding.statusText.setText(R.string.choosing_destination)

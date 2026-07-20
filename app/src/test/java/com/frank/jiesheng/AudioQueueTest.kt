@@ -84,4 +84,28 @@ class AudioQueueTest {
 
         assertEquals(listOf(first, second, third), result.queue.items)
     }
+
+    @Test
+    fun `equal known timestamps preserve stable selection order`() {
+        val equalFirst = item(1, 1_000)
+        val equalSecond = item(2, 1_000)
+        val equalThird = item(3, 1_000)
+
+        val result = AudioQueue(listOf(equalFirst)).addAll(listOf(equalSecond, equalThird))
+            as QueueChange.Updated
+
+        assertEquals(listOf(equalFirst, equalSecond, equalThird), result.queue.items)
+    }
+
+    @Test
+    fun `multiple unknown timestamps remain last in stable selection order`() {
+        val unknownFirst = item(1, null)
+        val known = item(2, 1_000)
+        val unknownSecond = item(3, null)
+
+        val result = AudioQueue(listOf(unknownFirst)).addAll(listOf(known, unknownSecond))
+            as QueueChange.Updated
+
+        assertEquals(listOf(known, unknownFirst, unknownSecond), result.queue.items)
+    }
 }

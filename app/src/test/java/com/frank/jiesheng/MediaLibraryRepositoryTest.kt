@@ -55,6 +55,20 @@ class MediaLibraryRepositoryTest {
         assertEquals(listOf("valid.m4a"), folders.single().items.map { it.name })
     }
 
+    @Test
+    @Config(sdk = [28])
+    fun `api 26 to 28 derives folder from legacy DATA parent path`() {
+        val resolver = RuntimeEnvironment.getApplication().contentResolver
+        ShadowContentResolver.registerProviderInternal(MediaStore.AUTHORITY, InMemoryMediaStoreProvider())
+        insertLegacyAudio(resolver, "/storage/emulated/0/Recordings/Interview/part-1.m4a")
+
+        val folder = MediaLibraryRepository(resolver).load().single()
+
+        assertEquals("/storage/emulated/0/Recordings/Interview", folder.path)
+        assertEquals("Interview", folder.name)
+        assertEquals("part-1.m4a", folder.items.single().name)
+    }
+
     private fun insertAudio(
         resolver: android.content.ContentResolver,
         relativePath: String,
@@ -70,6 +84,22 @@ class MediaLibraryRepositoryTest {
                 put(MediaStore.Audio.Media.MIME_TYPE, "audio/${displayName.substringAfterLast('.')}")
                 put(MediaStore.Audio.Media.DURATION, durationMs)
                 put(MediaStore.Audio.Media.DATE_MODIFIED, modifiedSeconds)
+            },
+        ),
+    )
+
+    private fun insertLegacyAudio(
+        resolver: android.content.ContentResolver,
+        dataPath: String,
+    ) = requireNotNull(
+        resolver.insert(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            ContentValues().apply {
+                put(MediaStore.Audio.Media.DATA, dataPath)
+                put(MediaStore.Audio.Media.DISPLAY_NAME, dataPath.substringAfterLast('/'))
+                put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4")
+                put(MediaStore.Audio.Media.DURATION, 1_000L)
+                put(MediaStore.Audio.Media.DATE_MODIFIED, 60L)
             },
         ),
     )

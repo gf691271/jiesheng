@@ -69,6 +69,38 @@ class DocumentMetadataReaderTest {
         }
     }
 
+    @Test
+    fun mixedReadableAndUnreadableDocumentsKeepReadableSiblingAndNameFailure() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val readable = Uri.fromFile(copyAssetToCache("tone-440.wav", "mixed-readable.wav"))
+        val unreadable = Uri.fromFile(File(context.cacheDir, "mixed-missing.wav"))
+
+        val batch = DocumentMetadataReader(context).readAll(
+            listOf(readable, unreadable),
+            SourceType.AUDIO,
+        )
+
+        assertEquals(listOf("mixed-readable.wav"), batch.items.map { it.name })
+        assertEquals(listOf("mixed-missing.wav"), batch.failures.map { it.name })
+        assertTrue(batch.failures.single().reason.contains("无法读取音频"))
+    }
+
+    @Test
+    fun readsExactMetadataAndAudioTrackFromProviderBackedVideoDocument() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        copyAssetToCache("tone-video.mp4", "provider-tone-video.mp4")
+        val uri = Uri.parse("content://com.frank.jiesheng.test.fixture/video/recognizable")
+
+        val selected = DocumentMetadataReader(context).read(uri, SourceType.VIDEO)
+
+        assertEquals("采访原片-可识别名称.mp4", selected.name)
+        assertEquals("MP4", selected.formatLabel)
+        assertEquals(1_784_550_896_000L, selected.lastModifiedEpochMs)
+        assertEquals(523L, selected.durationMs)
+        assertEquals(SourceType.VIDEO, selected.sourceType)
+        assertEquals(uri.toString(), selected.uri)
+    }
+
     private fun copyAssetToCache(assetName: String, destinationName: String): File {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val source = InstrumentationRegistry.getInstrumentation().context

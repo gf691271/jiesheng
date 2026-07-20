@@ -9,12 +9,13 @@
     <string name="merge_export">合并并导出</string>
     <string name="cancel">取消</string>
     <string name="choosing_destination">请选择保存位置…</string>
+    <string name="reading_sources">正在读取素材…</string>
     <string name="merging_progress">正在合并 %1$d%%</string>
     <string name="export_complete">已导出 %1$s</string>
     <string name="export_failed">合并失败：%1$s</string>
     <string name="read_failed">无法读取这个音频，请换一个文件</string>
+    <string name="read_failure_item">%1$s：%2$s</string>
     <string name="write_failed">无法保存文件，请换一个位置</string>
-    <string name="limit_message">最多只能选择 20 个音频</string>
     <string name="move_up">上移</string>
     <string name="move_down">下移</string>
     <string name="remove">删除</string>
@@ -26,7 +27,6 @@
     <string name="video_files">视频文件</string>
     <string name="folder">文件夹</string>
     <string name="music_permission_denied">未授权读取音乐库，仍可从视频文件或文件夹选择</string>
-    <string name="video_has_no_audio">该视频没有可用音轨</string>
     <string name="media_folder_summary">%1$s\n%2$s · %3$d 个音频</string>
     <string name="confirm_media_selection">添加所选</string>
     <string name="media_selection_limit">最多还能选择 %1$d 个音频</string>
