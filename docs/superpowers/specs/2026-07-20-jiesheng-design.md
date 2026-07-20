@@ -124,7 +124,7 @@ Android/集成验证覆盖：
 - 仓库：`gf691271/jiesheng`，公开。
 - 许可证：Apache License 2.0。
 - README：中文优先，说明功能、隐私、支持格式、构建方式、Media3 归属和已知限制。
-- 上游依赖：`androidx.media3:media3-transformer:1.10.1`，Apache License 2.0。
+- 上游依赖：`androidx.media3:media3-transformer:1.9.4`，Apache License 2.0。该版本是支持本项目 compileSdk 35 的最新 1.9 系列补丁；1.10.1 已要求 compileSdk 36。
 - 首个版本：`v0.1.0`。
 - 发布产物：版本化 APK、SHA-256 校验文件和简短变更说明。
 - 使用独立发布签名密钥；密钥和口令不进入 Git。签名材料保存位置在发布记录中说明，但不公开秘密内容。
