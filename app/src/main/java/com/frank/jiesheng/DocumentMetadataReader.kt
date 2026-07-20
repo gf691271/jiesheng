@@ -36,29 +36,39 @@ class DocumentMetadataReader(private val context: Context) {
     }
 
     private fun readMetadata(uri: Uri): Metadata {
-        var displayName: String? = null
-        var lastModifiedEpochMs: Long? = null
-        var mimeType: String? = null
-        try {
+        val displayName = try {
             context.contentResolver.query(
                 uri,
-                arrayOf(
-                    OpenableColumns.DISPLAY_NAME,
-                    DocumentsContract.Document.COLUMN_LAST_MODIFIED,
-                    DocumentsContract.Document.COLUMN_MIME_TYPE,
-                ),
+                arrayOf(OpenableColumns.DISPLAY_NAME),
                 null,
                 null,
                 null,
             )?.use { cursor ->
                 if (cursor.moveToFirst()) {
-                    displayName = cursor.stringAt(OpenableColumns.DISPLAY_NAME)
-                    lastModifiedEpochMs = cursor.longAt(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
-                    mimeType = cursor.stringAt(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                    cursor.stringAt(OpenableColumns.DISPLAY_NAME)
+                } else {
+                    null
                 }
             }
         } catch (_: RuntimeException) {
-            // Providers may not expose document columns.
+            null
+        }
+        var lastModifiedEpochMs = try {
+            context.contentResolver.query(
+                uri,
+                arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.longAt(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+                } else {
+                    null
+                }
+            }
+        } catch (_: RuntimeException) {
+            null
         }
         if (lastModifiedEpochMs == null && uri.authority == MediaStore.AUTHORITY) {
             lastModifiedEpochMs = try {
@@ -79,12 +89,10 @@ class DocumentMetadataReader(private val context: Context) {
                 null
             }
         }
-        if (mimeType == null) {
-            mimeType = try {
-                context.contentResolver.getType(uri)
-            } catch (_: RuntimeException) {
-                null
-            }
+        val mimeType = try {
+            context.contentResolver.getType(uri)
+        } catch (_: RuntimeException) {
+            null
         }
         return Metadata(
             name = displayName ?: uri.lastPathSegment ?: "未命名媒体",

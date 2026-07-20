@@ -1,11 +1,14 @@
 package com.frank.jiesheng
 
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
+import java.util.UUID
 import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -40,6 +43,23 @@ class DocumentMetadataReaderTest {
     }
 
     @Test
+    fun preservesMediaStoreDisplayNameWhenDocumentColumnsAreUnsupported() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val expectedName = "完整可读文件名-${UUID.randomUUID().toString().take(8)}.wav"
+        val uri = insertMediaStoreAudio(expectedName)
+
+        try {
+            val selected = DocumentMetadataReader(context).read(uri)
+
+            assertEquals(expectedName, selected.name)
+            assertEquals("WAV", selected.formatLabel)
+            assertTrue("missing MediaStore modification time", selected.lastModifiedEpochMs != null)
+        } finally {
+            context.contentResolver.delete(uri, null, null)
+        }
+    }
+
+    @Test
     fun rejectsVideoWithoutAnAudioTrack() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val file = copyAssetToCache("silent-video.mp4", "metadata-silent-video.mp4")
@@ -57,5 +77,33 @@ class DocumentMetadataReaderTest {
                 file.outputStream().use { output -> input.copyTo(output) }
             }
         }
+    }
+
+    private fun insertMediaStoreAudio(displayName: String): Uri {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val uri = requireNotNull(
+            context.contentResolver.insert(
+                MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+                ContentValues().apply {
+                    put(MediaStore.Audio.Media.DISPLAY_NAME, displayName)
+                    put(MediaStore.Audio.Media.MIME_TYPE, "audio/wav")
+                    put(MediaStore.Audio.Media.RELATIVE_PATH, "Music/JieshengMetadataTest/")
+                    put(MediaStore.Audio.Media.IS_PENDING, 1)
+                },
+            ),
+        )
+        InstrumentationRegistry.getInstrumentation().context.assets.open("tone-440.wav").use { input ->
+            context.contentResolver.openOutputStream(uri).use { output ->
+                requireNotNull(output)
+                input.copyTo(output)
+            }
+        }
+        context.contentResolver.update(
+            uri,
+            ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) },
+            null,
+            null,
+        )
+        return uri
     }
 }

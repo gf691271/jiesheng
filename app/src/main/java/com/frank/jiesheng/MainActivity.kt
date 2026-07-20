@@ -11,7 +11,6 @@ import android.provider.DocumentsContract
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -61,9 +60,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val pickVideos = registerForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(MAX_ITEMS),
-    ) { uris ->
+    private val openVideos = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         readSelectedDocuments(uris, SourceType.VIDEO)
     }
 
@@ -89,9 +86,7 @@ class MainActivity : AppCompatActivity() {
         mergeEngine = Media3AudioMergeEngine(applicationContext)
 
         binding.musicLibraryButton.setOnClickListener { openMusicLibrary() }
-        binding.galleryButton.setOnClickListener {
-            pickVideos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
-        }
+        binding.galleryButton.setOnClickListener { openVideos.launch(arrayOf("video/*")) }
         binding.folderButton.setOnClickListener { openAudio.launch(arrayOf("audio/*")) }
         binding.mergeButton.setOnClickListener {
             viewModel.startExport()

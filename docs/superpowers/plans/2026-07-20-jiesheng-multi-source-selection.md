@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let users select up to 20 chronological audio sources from the music library, gallery videos, or the system file picker while showing complete metadata and exporting one M4A.
+**Goal:** Let users select up to 20 chronological audio sources from the music library, video documents, or the audio document picker while showing complete metadata and exporting one M4A.
 
-**Architecture:** Extend the immutable queue item with display metadata and stable time sorting. Add a read-only MediaStore repository plus a dedicated lightweight library activity; keep gallery and document access behind system pickers. All sources converge on the existing Media3 audio-only composition boundary.
+**Architecture:** Extend the immutable queue item with display metadata and stable time sorting. Add a read-only MediaStore repository plus a dedicated lightweight library activity; keep video and audio document access behind Storage Access Framework system pickers. All sources converge on the existing Media3 audio-only composition boundary.
 
 **Tech Stack:** Kotlin 2.2.21, Android Views, Activity Result APIs, MediaStore, MediaMetadataRetriever/MediaExtractor, Media3 Transformer 1.9.4, JUnit 4, Robolectric, AndroidX Test/Espresso, API 26–35.
 
@@ -14,7 +14,7 @@
 - Queue size is 2–20 for export; a batch that would exceed 20 is rejected atomically.
 - New additions are stably sorted by last-modified time ascending, with unknown times last; arrows still permit manual adjustment.
 - Cards show an untruncated name, format/source plus duration, and last-modified time to seconds.
-- Music library uses `READ_MEDIA_AUDIO` on API 33+ and `READ_EXTERNAL_STORAGE` only through API 32; gallery and document pickers remain permission-minimal.
+- Music library uses `READ_MEDIA_AUDIO` on API 33+ and `READ_EXTERNAL_STORAGE` only through API 32; the video and audio document pickers need no additional media-library permission.
 - Video inputs contribute audio only; videos without an audio track are rejected.
 - Output remains AAC in M4A; source files remain untouched.
 
@@ -245,11 +245,11 @@ Commit: `feat: browse indexed audio folders`.
 
 **Interfaces:**
 - Consumes: all prior task interfaces.
-- Produces: music-library, gallery-video, and folder-audio entry points feeding `MainViewModel.addAll`.
+- Produces: music-library, video-file, and folder-audio entry points feeding `MainViewModel.addAll`.
 
 - [ ] **Step 1: Write failing UI and video-merge tests**
 
-Assert the empty screen has buttons `音乐库`, `相册`, `文件夹`; a long filename is fully present with `maxLines == Integer.MAX_VALUE` and no ellipsize; metadata lines show source/duration and exact modified time. Extend the engine test to merge `tone-video.mp4` with M4A and assert one audio track and combined duration.
+Assert the empty screen has buttons `音乐库`, `视频文件`, `文件夹`; the video button launches `ACTION_OPEN_DOCUMENT` with multi-select and a `video/*` MIME filter; a long filename is fully present with `maxLines == Integer.MAX_VALUE` and no ellipsize; metadata lines show source/duration and exact modified time. Extend the engine test to merge `tone-video.mp4` with M4A and assert one audio track and combined duration.
 
 - [ ] **Step 2: Verify RED**
 
@@ -259,7 +259,7 @@ Expected: UI IDs/text and video merge assertions fail before implementation.
 
 - [ ] **Step 3: Implement launchers and unified ingestion**
 
-Register `RequestPermission`, `StartActivityForResult` for `MediaLibraryActivity`, `PickMultipleVisualMedia(20)` with `VideoOnly`, and existing `OpenMultipleDocuments`. Route every returned URI list through `readSelectedDocuments(uris, sourceType)`, reject batches over remaining capacity, and keep other entry points usable when music permission is denied.
+Register `RequestPermission`, `StartActivityForResult` for `MediaLibraryActivity`, and separate `OpenMultipleDocuments` launchers for `video/*` and `audio/*`. Route every returned URI list through `readSelectedDocuments(uris, sourceType)`, reject batches over remaining capacity, and keep both document-picker entry points usable when music permission is denied.
 
 Replace the single add button with three equal source buttons. In `item_audio.xml`, remove `ellipsize` and `maxLines="1"`, add `detailText` and `modifiedText`, and render them with `AudioText`.
 
@@ -299,7 +299,7 @@ Expected: build successful; unit and Android tests have zero failures; lint has 
 
 - [ ] **Step 3: Perform manual API 35 end-to-end checks**
 
-Install the signed APK and verify: music permission denial leaves gallery/folder usable; music library folder counts work after grant; video and folder sources enter one list; 20-item cap and time order hold; long names and all metadata are visible; export produces a playable single-track AAC/M4A.
+Install the signed APK and verify: music permission denial leaves video-file/folder pickers usable; music library folder counts work after grant; video-file and folder sources enter one list with their original names; 20-item cap and time order hold; long names and all metadata are visible; export produces a playable single-track AAC/M4A.
 
 - [ ] **Step 4: Publish and verify assets**
 

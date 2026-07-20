@@ -5,7 +5,7 @@
     <string name="privacy_note">全程离线 · 仅访问你选择或授权的媒体</string>
     <string name="selected_audio">已选音频</string>
     <string name="empty_hint">还没有音频</string>
-    <string name="empty_detail">从音乐库、相册或文件夹添加 2–20 段素材</string>
+    <string name="empty_detail">从音乐库、视频文件或文件夹添加 2–20 段素材</string>
     <string name="merge_export">合并并导出</string>
     <string name="cancel">取消</string>
     <string name="choosing_destination">请选择保存位置…</string>
@@ -23,9 +23,9 @@
     <string name="down_arrow">↓</string>
     <string name="remove_symbol">×</string>
     <string name="music_library">音乐库</string>
-    <string name="gallery">相册</string>
+    <string name="video_files">视频文件</string>
     <string name="folder">文件夹</string>
-    <string name="music_permission_denied">未授权读取音乐库，仍可从相册或文件夹选择</string>
+    <string name="music_permission_denied">未授权读取音乐库，仍可从视频文件或文件夹选择</string>
     <string name="video_has_no_audio">该视频没有可用音轨</string>
     <string name="media_folder_summary">%1$s\n%2$s · %3$d 个音频</string>
     <string name="confirm_media_selection">添加所选</string>

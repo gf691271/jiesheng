@@ -1,8 +1,15 @@
 package com.frank.jiesheng
 
+import android.app.Activity
+import android.app.Instrumentation.ActivityResult
+import android.content.Intent
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.intent.Intents
+import androidx.test.espresso.intent.Intents.intending
+import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isEnabled
 import androidx.test.espresso.matcher.ViewMatchers.withId
@@ -13,6 +20,7 @@ import com.frank.jiesheng.databinding.ItemAudioBinding
 import java.time.Instant
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.hamcrest.Matchers.not
@@ -28,12 +36,37 @@ class MainActivityTest {
                 .check(matches(withText("音乐库")))
                 .check(matches(isDisplayed()))
             onView(withId(R.id.galleryButton))
-                .check(matches(withText("相册")))
+                .check(matches(withText("视频文件")))
                 .check(matches(isDisplayed()))
             onView(withId(R.id.folderButton))
                 .check(matches(withText("文件夹")))
                 .check(matches(isDisplayed()))
             onView(withId(R.id.mergeButton)).check(matches(not(isEnabled())))
+        }
+    }
+
+    @Test
+    fun videoFileButtonLaunchesMultiSelectVideoDocumentPicker() {
+        Intents.init()
+        try {
+            intending(hasAction(Intent.ACTION_OPEN_DOCUMENT)).respondWith(
+                ActivityResult(Activity.RESULT_CANCELED, null),
+            )
+            ActivityScenario.launch(MainActivity::class.java).use {
+                onView(withId(R.id.galleryButton)).perform(click())
+
+                val intent = Intents.getIntents().single {
+                    it.action == Intent.ACTION_OPEN_DOCUMENT
+                }
+                assertEquals("*/*", intent.type)
+                assertArrayEquals(
+                    arrayOf("video/*"),
+                    intent.getStringArrayExtra(Intent.EXTRA_MIME_TYPES),
+                )
+                assertTrue(intent.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false))
+            }
+        } finally {
+            Intents.release()
         }
     }
 
