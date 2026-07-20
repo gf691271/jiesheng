@@ -24,4 +24,8 @@
     <string name="up_arrow">↑</string>
     <string name="down_arrow">↓</string>
     <string name="remove_symbol">×</string>
+    <string name="music_library">音乐库</string>
+    <string name="media_folder_summary">%1$s\n%2$s · %3$d 个音频</string>
+    <string name="confirm_media_selection">添加所选</string>
+    <string name="media_selection_limit">最多还能选择 %1$d 个音频</string>
 </resources>
