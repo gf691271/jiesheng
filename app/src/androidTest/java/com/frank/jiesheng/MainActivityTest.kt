@@ -3,6 +3,7 @@ package com.frank.jiesheng
 import android.app.Activity
 import android.app.Instrumentation.ActivityResult
 import android.content.Intent
+import android.widget.LinearLayout
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
@@ -22,6 +23,7 @@ import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.hamcrest.Matchers.not
 import org.junit.Test
@@ -96,7 +98,7 @@ class MainActivityTest {
     }
 
     @Test
-    fun audioCardShowsCompleteFilenameSourceDurationAndExactModifiedTime() {
+    fun audioCardPrioritizesFilenameAndPlacesControlsAtBottom() {
         val filename = "2026-07-20_这是一个很长很长而且需要完整显示不能用省略号截断的采访录音文件名.mp4"
         val item = SelectedAudio(
             uri = "content://video/1",
@@ -115,6 +117,13 @@ class MainActivityTest {
                 assertEquals(filename, binding.nameText.text.toString())
                 assertEquals(Int.MAX_VALUE, binding.nameText.maxLines)
                 assertNull(binding.nameText.ellipsize)
+                assertEquals(LinearLayout.VERTICAL, binding.root.orientation)
+                val controls = binding.moveUpButton.parent as LinearLayout
+                assertEquals(LinearLayout.HORIZONTAL, controls.orientation)
+                assertEquals(controls, binding.moveDownButton.parent)
+                assertEquals(controls, binding.removeButton.parent)
+                assertNotNull(binding.detailText.background)
+                assertNotNull(binding.modifiedText.background)
                 assertEquals("MP4（取音频）· 12:36", binding.detailText.text.toString())
                 assertEquals("修改于 2026-07-20 14:36:08", binding.modifiedText.text.toString())
             }

@@ -26,7 +26,7 @@
 - Consumes: `ItemAudioBinding`, `nameText`, `detailText`, `modifiedText`, `moveUpButton`, `moveDownButton`, `removeButton`。
 - Produces: 与 `MainActivity.render` 兼容的纵向卡片；全部既有 view ID 不变。
 
-- [ ] **Step 1: 写入失败的界面结构测试**
+- [x] **Step 1: 写入失败的界面结构测试**
 
 ```kotlin
 assertEquals(LinearLayout.VERTICAL, binding.root.orientation)
@@ -37,13 +37,13 @@ assertEquals(Int.MAX_VALUE, binding.nameText.maxLines)
 assertNull(binding.nameText.ellipsize)
 ```
 
-- [ ] **Step 2: 运行测试确认它因当前横向根布局而失败**
+- [x] **Step 2: 运行测试确认它因当前横向根布局而失败**
 
-Run: `./gradlew connectedDebugAndroidTest --tests com.frank.jiesheng.MainActivityTest.audioCardPrioritizesFilenameAndPlacesControlsAtBottom`
+Run: `./gradlew -Pandroid.testInstrumentationRunnerArguments.class=com.frank.jiesheng.MainActivityTest#audioCardPrioritizesFilenameAndPlacesControlsAtBottom connectedDebugAndroidTest`
 
 Expected: FAIL，根布局方向为 `HORIZONTAL`，而不是 `VERTICAL`。
 
-- [ ] **Step 3: 最小布局实现**
+- [x] **Step 3: 最小布局实现**
 
 ```xml
 <LinearLayout android:orientation="vertical" ...>
@@ -66,19 +66,19 @@ Expected: FAIL，根布局方向为 `HORIZONTAL`，而不是 `VERTICAL`。
 
 Apply tag backgrounds to `detailText` and `modifiedText`, retain existing glyph text and content descriptions, and place a top divider on the bottom control row.
 
-- [ ] **Step 4: 运行目标测试与完整测试**
+- [x] **Step 4: 运行目标测试与完整测试**
 
-Run: `./gradlew connectedDebugAndroidTest --tests com.frank.jiesheng.MainActivityTest`
+Run: `./gradlew -Pandroid.testInstrumentationRunnerArguments.class=com.frank.jiesheng.MainActivityTest connectedDebugAndroidTest`
 
 Expected: PASS，四个 `MainActivityTest` 测试通过；长文件名文字、精确修改时间和三个操作 ID 保持可访问。
 
-- [ ] **Step 5: 构建并在 API 35 模拟器人工核对**
+- [x] **Step 5: 构建并在 API 35 模拟器人工核对**
 
 Run: `./gradlew assembleDebug`
 
 Expected: `BUILD SUCCESSFUL`；安装 debug APK，确认长文件名位于卡片顶部、标签横排、底部三图标等宽。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add app/src/androidTest/java/com/frank/jiesheng/MainActivityTest.kt app/src/main/res/layout/item_audio.xml
