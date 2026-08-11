@@ -11,6 +11,7 @@ import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.Intents.intending
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
+import androidx.test.espresso.intent.matcher.IntentMatchers.hasComponent
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isEnabled
 import androidx.test.espresso.matcher.ViewMatchers.withId
@@ -31,6 +32,29 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityTest {
+    @Test
+    fun splitEntryOpensTheIndependentSplitScreen() {
+        Intents.init()
+        try {
+            intending(hasComponent(SplitActivity::class.java.name)).respondWith(
+                ActivityResult(Activity.RESULT_CANCELED, null),
+            )
+            ActivityScenario.launch(MainActivity::class.java).use {
+                onView(withId(R.id.splitAudioButton))
+                    .check(matches(withText("拆分音频")))
+                    .perform(click())
+
+                assertTrue(
+                    Intents.getIntents().any { intent ->
+                        intent.component?.className == SplitActivity::class.java.name
+                    },
+                )
+            }
+        } finally {
+            Intents.release()
+        }
+    }
+
     @Test
     fun emptyScreenOffersAllThreeSourcesAndDisablesMerge() {
         ActivityScenario.launch(MainActivity::class.java).use {

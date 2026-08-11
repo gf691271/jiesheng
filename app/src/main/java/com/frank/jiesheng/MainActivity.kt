@@ -88,6 +88,9 @@ class MainActivity : AppCompatActivity() {
         binding.musicLibraryButton.setOnClickListener { openMusicLibrary() }
         binding.galleryButton.setOnClickListener { openVideos.launch(arrayOf("video/*")) }
         binding.folderButton.setOnClickListener { openAudio.launch(arrayOf("audio/*")) }
+        binding.splitAudioButton.setOnClickListener {
+            startActivity(Intent(this, SplitActivity::class.java))
+        }
         binding.mergeButton.setOnClickListener {
             if (viewModel.startExport()) {
                 targetName = ExportNames.m4a(Instant.now(), ZoneId.systemDefault())

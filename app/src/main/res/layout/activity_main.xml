@@ -202,5 +202,17 @@
             android:textColor="@android:color/white"
             android:textSize="17sp"
             android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/splitAudioButton"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="12dp"
+            android:backgroundTint="@color/surface_soft"
+            android:text="@string/split_audio"
+            android:textAllCaps="false"
+            android:textColor="@color/accent_dark"
+            android:textSize="16sp"
+            android:textStyle="bold" />
     </LinearLayout>
 </ScrollView>
