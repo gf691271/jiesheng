@@ -21,6 +21,7 @@
         android:layout_weight="1"
         android:digits="0123456789:"
         android:hint="@string/cut_point_hint"
+        android:importantForAutofill="no"
         android:inputType="datetime"
         android:maxLines="1"
         android:paddingStart="12dp"
