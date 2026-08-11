@@ -9,7 +9,8 @@
 - APK SHA-256: `0db1892d20c51f84434ca2d5e9f9ef0d34ebefa8c88090882042caefbc0e9588`
 - Signing: one RSA-4096 signer, APK Signature Scheme v2
 - Certificate SHA-256: `E4:5E:49:B4:87:A0:43:3D:0B:DB:FB:4E:5C:5C:CB:68:83:9D:8F:B0:F5:C8:B9:2E:EB:34:E3:A1:DD:AC:5F:DB`
-- Publication status: local APK only; no GitHub Release was created
+- Publication status: GitHub Release `v0.3.0`
+- Release URL: `https://github.com/gf691271/jiesheng/releases/tag/v0.3.0`
 
 ## v0.3.0 change
 
