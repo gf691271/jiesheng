@@ -1,5 +1,15 @@
 package com.frank.jiesheng
 
+import android.content.Context
+import android.net.Uri
+import androidx.core.net.toUri
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.ZoneId
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +22,7 @@ import kotlinx.coroutines.flow.update
 data class MainUiState(
     val queue: AudioQueue = AudioQueue(),
     val phase: MergePhase = MergePhase.Idle,
+    val notice: String? = null,
 ) {
     val areSourcesEnabled: Boolean
         get() = phase == MergePhase.Idle
@@ -27,12 +38,64 @@ sealed interface MergePhase {
     data object Idle : MergePhase
     data object ReadingSources : MergePhase
     data object ChoosingDestination : MergePhase
+    data object Stopping : MergePhase
     data class Merging(val progress: Int) : MergePhase
     data class Completed(val fileName: String) : MergePhase
     data class Failed(val reason: String) : MergePhase
 }
 
 class MainViewModel : ViewModel() {
+    private var export: ExportCoordinator? = null
+    var targetName: String = ""
+        private set
+
+    fun readDocuments(context: Context, uris: List<Uri>, sourceType: SourceType) {
+        val app = context.applicationContext
+        val existing = state.value.queue.items.map { it.uri }.toSet()
+        val candidates = uris.distinct().filterNot { it.toString() in existing }
+        if (!beginSourceReading(candidates.size)) return
+        viewModelScope.launch {
+            try {
+                val batch = withContext(Dispatchers.IO) { DocumentMetadataReader(app).readAll(candidates, sourceType) }
+                finishSourceReading(batch.items)
+                if (batch.failures.isNotEmpty()) mutableState.update { it.copy(
+                    notice = batch.failures.joinToString("\n") { failure -> "${failure.name}：${failure.reason}" },
+                ) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                mutableState.update { it.copy(notice = error.message ?: "无法读取音频") }
+            } finally {
+                finishSourceReading(emptyList())
+            }
+        }
+    }
+
+    fun exportTo(context: Context, destination: Uri) {
+        if (state.value.phase != MergePhase.ChoosingDestination) return
+        val app = context.applicationContext
+        val inputs = state.value.queue.items.map { it.uri.toUri() }
+        val name = targetName
+        val owner = ExportCoordinator(viewModelScope, app.cacheDir, AndroidExportStorage(app))
+        export = owner
+        beginMerge()
+        owner.start(
+            listOf(ExportPart(name, destination.toString()) { output, progress ->
+                Media3AudioMergeEngine(app).awaitMerge(inputs, output, progress)
+            }),
+            ::updateProgress,
+            { mutableState.update { it.copy(phase = MergePhase.Stopping) } },
+            { outcome ->
+                export = null
+                mutableState.update { it.copy(phase = MergePhase.Idle, notice = outcome.message("已保存：$name")) }
+            },
+        )
+    }
+
+    fun stopExport() {
+        export?.cancel { mutableState.update { it.copy(phase = MergePhase.Stopping) } }
+    }
+
     private val mutableState = MutableStateFlow(MainUiState())
     val state: StateFlow<MainUiState> = mutableState.asStateFlow()
 
@@ -96,7 +159,8 @@ class MainViewModel : ViewModel() {
 
     fun startExport(): Boolean {
         if (!mutableState.value.isMergeEnabled) return false
-        mutableState.update { it.copy(phase = MergePhase.ChoosingDestination) }
+        targetName = ExportNames.m4a(Instant.now(), ZoneId.systemDefault())
+        mutableState.update { it.copy(phase = MergePhase.ChoosingDestination, notice = null) }
         return true
     }
 
@@ -105,7 +169,9 @@ class MainViewModel : ViewModel() {
     }
 
     fun updateProgress(progress: Int) {
-        mutableState.update { it.copy(phase = MergePhase.Merging(progress.coerceIn(0, 100))) }
+        if (state.value.phase is MergePhase.Merging) {
+            mutableState.update { it.copy(phase = MergePhase.Merging(progress.coerceIn(0, 100))) }
+        }
     }
 
     fun finishExport(fileName: String) {

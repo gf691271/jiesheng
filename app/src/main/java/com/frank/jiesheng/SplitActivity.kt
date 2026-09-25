@@ -2,7 +2,6 @@ package com.frank.jiesheng
 
 import android.net.Uri
 import android.os.Bundle
-import android.provider.DocumentsContract
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
@@ -10,45 +9,26 @@ import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.net.toUri
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.frank.jiesheng.databinding.ActivitySplitBinding
 import com.frank.jiesheng.databinding.ItemSplitPointBinding
-import java.io.File
-import java.io.IOException
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class SplitActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySplitBinding
     private val viewModel: SplitViewModel by viewModels()
-    private lateinit var metadataReader: DocumentMetadataReader
-    private lateinit var splitEngine: AudioSplitEngine
-    private var temporaryOutput: File? = null
-    private var destinationTree: Uri? = null
-    private var sourceUri: Uri? = null
-    private var exportSegments: List<SplitSegment> = emptyList()
-    private var exportNames: List<String> = emptyList()
-    private var currentSegmentIndex = 0
-    private val createdDocuments = mutableListOf<Uri>()
-    private var copyJob: kotlinx.coroutines.Job? = null
-    private var sessionToken = 0L
-    private var sessionStopping = false
-
     private val openSource = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) readSource(uri)
+        if (uri != null) viewModel.readSource(applicationContext, uri)
     }
 
     private val openDestination = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri == null) {
             viewModel.cancelDestinationChoice()
         } else {
-            beginSplit(uri)
+            viewModel.exportTo(applicationContext, uri)
         }
     }
 
@@ -56,47 +36,19 @@ class SplitActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySplitBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        metadataReader = DocumentMetadataReader(applicationContext)
-        splitEngine = Media3AudioSplitEngine(applicationContext)
-
-        repeat(MIN_CUT_POINTS) { addCutPointRow() }
+        viewModel.pointTexts.forEach { addCutPointRow(it, persist = false) }
         binding.backButton.setOnClickListener { handleBack() }
         binding.chooseSplitSourceButton.setOnClickListener {
             openSource.launch(arrayOf("audio/*"))
         }
         binding.addCutPointButton.setOnClickListener { addCutPointRow() }
         binding.splitExportButton.setOnClickListener { requestDestination() }
-        binding.cancelSplitButton.setOnClickListener { stopExport(reason = null) }
+        binding.cancelSplitButton.setOnClickListener { viewModel.stopExport() }
         onBackPressedDispatcher.addCallback(this) { handleBack() }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.state.collect(::render)
-            }
-        }
-    }
-
-    override fun onDestroy() {
-        if (isFinishing) {
-            splitEngine.cancel()
-            temporaryOutput?.delete()
-        }
-        super.onDestroy()
-    }
-
-    private fun readSource(uri: Uri) {
-        if (!viewModel.beginSourceReading()) return
-        lifecycleScope.launch {
-            try {
-                val source = withContext(Dispatchers.IO) {
-                    metadataReader.read(uri, SourceType.AUDIO)
-                }
-                viewModel.finishSourceReading(source)
-            } catch (error: Exception) {
-                val reason = error.message ?: getString(R.string.read_failed)
-                viewModel.failSourceReading(reason)
-                Toast.makeText(this@SplitActivity, reason, Toast.LENGTH_LONG).show()
-                viewModel.reset()
             }
         }
     }
@@ -109,181 +61,22 @@ class SplitActivity : AppCompatActivity() {
         }
     }
 
-    private fun beginSplit(treeUri: Uri) {
-        val state = viewModel.state.value
-        val source = state.source ?: run {
-            viewModel.cancelDestinationChoice()
-            return
-        }
-        if (!viewModel.beginSplit()) return
-
-        sessionToken += 1
-        sessionStopping = false
-        destinationTree = treeUri
-        sourceUri = source.uri.toUri()
-        exportSegments = state.segments
-        exportNames = SplitExportNames.forSource(source.name, exportSegments.size)
-        currentSegmentIndex = 0
-        synchronized(createdDocuments) { createdDocuments.clear() }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        exportNextSegment(sessionToken)
-    }
-
-    private fun exportNextSegment(token: Long) {
-        if (token != sessionToken || sessionStopping) return
-        if (currentSegmentIndex >= exportSegments.size) {
-            completeExport(token)
-            return
-        }
-        val input = sourceUri ?: return stopExport(getString(R.string.read_failed))
-        val output = File(cacheDir, "jiesheng-split-$token-$currentSegmentIndex.m4a").apply { delete() }
-        temporaryOutput = output
-        splitEngine.split(
-            input,
-            exportSegments[currentSegmentIndex],
-            output,
-            object : SplitListener {
-                override fun onProgress(percent: Int) {
-                    if (token == sessionToken && !sessionStopping) {
-                        viewModel.updateProgress(
-                            completedSegments = currentSegmentIndex,
-                            totalSegments = exportSegments.size,
-                            currentPercent = percent,
-                        )
-                    }
-                }
-
-                override fun onCompleted() {
-                    copyCurrentSegment(token)
-                }
-
-                override fun onError(error: Throwable) {
-                    stopExport(error.message ?: getString(R.string.read_failed))
-                }
-            },
-        )
-    }
-
-    private fun copyCurrentSegment(token: Long) {
-        val source = temporaryOutput ?: return stopExport(getString(R.string.split_write_failed))
-        val name = exportNames.getOrNull(currentSegmentIndex)
-            ?: return stopExport(getString(R.string.split_write_failed))
-        copyJob = lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    val destination = createOutputDocument(name)
-                    synchronized(createdDocuments) { createdDocuments += destination }
-                    contentResolver.openOutputStream(destination, "w").use { output ->
-                        if (output == null) throw IOException(getString(R.string.split_write_failed))
-                        source.inputStream().use { input -> input.copyTo(output) }
-                    }
-                }
-                if (token != sessionToken || sessionStopping) return@launch
-                source.delete()
-                temporaryOutput = null
-                currentSegmentIndex += 1
-                viewModel.updateProgress(
-                    completedSegments = currentSegmentIndex,
-                    totalSegments = exportSegments.size,
-                    currentPercent = 0,
-                )
-                copyJob = null
-                exportNextSegment(token)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                copyJob = null
-                if (token == sessionToken && !sessionStopping) {
-                    stopExport(error.message ?: getString(R.string.split_write_failed))
-                }
-            }
-        }
-    }
-
-    private fun createOutputDocument(name: String): Uri {
-        val tree = destinationTree ?: throw IOException(getString(R.string.split_create_failed))
-        val root = DocumentsContract.buildDocumentUriUsingTree(
-            tree,
-            DocumentsContract.getTreeDocumentId(tree),
-        )
-        return DocumentsContract.createDocument(contentResolver, root, "audio/mp4", name)
-            ?: throw IOException(getString(R.string.split_create_failed))
-    }
-
-    private fun completeExport(token: Long) {
-        if (token != sessionToken || sessionStopping) return
-        temporaryOutput?.delete()
-        temporaryOutput = null
-        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val count = exportSegments.size
-        synchronized(createdDocuments) { createdDocuments.clear() }
-        clearExportSession()
-        viewModel.finishSplit(count)
-        Toast.makeText(this, getString(R.string.split_complete, count), Toast.LENGTH_LONG).show()
-        viewModel.reset()
-    }
-
-    private fun stopExport(reason: String?) {
-        if (sessionStopping) return
-        sessionStopping = true
-        sessionToken += 1
-        splitEngine.cancel()
-        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val activeCopy = copyJob
-        copyJob = null
-        activeCopy?.cancel()
-        lifecycleScope.launch {
-            activeCopy?.join()
-            temporaryOutput?.delete()
-            temporaryOutput = null
-            val retainedCount = withContext(Dispatchers.IO) { rollbackCreatedDocuments() }
-            clearExportSession()
-            if (reason == null) {
-                viewModel.reset()
-            } else {
-                val detail = if (retainedCount == 0) {
-                    reason
-                } else {
-                    getString(R.string.split_retained_files, reason, retainedCount)
-                }
-                viewModel.failSplit(detail)
-                Toast.makeText(
-                    this@SplitActivity,
-                    getString(R.string.split_failed, detail),
-                    Toast.LENGTH_LONG,
-                ).show()
-                viewModel.reset()
-            }
-            sessionStopping = false
-        }
-    }
-
-    private fun rollbackCreatedDocuments(): Int {
-        val documents = synchronized(createdDocuments) {
-            createdDocuments.toList().also { createdDocuments.clear() }
-        }
-        return documents.count { uri ->
-            try {
-                !DocumentsContract.deleteDocument(contentResolver, uri)
-            } catch (_: Exception) {
-                true
-            }
-        }
-    }
-
-    private fun clearExportSession() {
-        destinationTree = null
-        sourceUri = null
-        exportSegments = emptyList()
-        exportNames = emptyList()
-        currentSegmentIndex = 0
-    }
-
-    private fun addCutPointRow() {
+    private fun addCutPointRow(text: String = "", persist: Boolean = true) {
         if (binding.cutPointList.childCount >= MAX_CUT_POINTS) return
         val row = ItemSplitPointBinding.inflate(layoutInflater, binding.cutPointList, false)
+        if (resources.configuration.fontScale > 1.2f) {
+            row.root.orientation = android.widget.LinearLayout.VERTICAL
+            row.cutPointNumberText.layoutParams.width = android.widget.LinearLayout.LayoutParams.MATCH_PARENT
+            row.cutPointInput.layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+        }
+        row.cutPointInput.isSaveEnabled = false
+        row.cutPointInput.setText(text)
         row.cutPointInput.doAfterTextChanged {
             row.cutPointInput.error = null
+            viewModel.updatePoints(cutPointTexts())
             updateExportAvailability()
         }
         row.removeCutPointButton.setOnClickListener {
@@ -291,10 +84,12 @@ class SplitActivity : AppCompatActivity() {
                 viewModel.state.value.areEditsEnabled
             ) {
                 binding.cutPointList.removeView(row.root)
+                viewModel.updatePoints(cutPointTexts())
                 updateCutPointRows()
             }
         }
         binding.cutPointList.addView(row.root)
+        if (persist) viewModel.updatePoints(cutPointTexts())
         updateCutPointRows()
     }
 
@@ -321,8 +116,7 @@ class SplitActivity : AppCompatActivity() {
     private fun updateExportAvailability() {
         if (!::binding.isInitialized) return
         val state = viewModel.state.value
-        binding.splitExportButton.isEnabled = state.isExportEnabled &&
-            state.source?.let { SplitPlan.create(it.durationMs, cutPointTexts()) is SplitPlanResult.Valid } == true
+        binding.splitExportButton.isEnabled = state.isExportEnabled
     }
 
     private fun clearFieldErrors() {
@@ -340,6 +134,12 @@ class SplitActivity : AppCompatActivity() {
     }
 
     private fun render(state: SplitUiState) {
+        val busy = state.phase is SplitPhase.Splitting || state.phase == SplitPhase.Stopping
+        if (busy) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        binding.splitResultText.text = state.notice
+        binding.splitResultText.visibility = if (state.notice == null) View.GONE else View.VISIBLE
+        binding.cancelSplitButton.isEnabled = state.phase is SplitPhase.Splitting
         val source = state.source
         binding.splitSourceNameText.text = source?.name ?: getString(R.string.split_source_empty)
         binding.splitSourceDurationText.visibility = if (source == null) View.GONE else View.VISIBLE
@@ -352,7 +152,7 @@ class SplitActivity : AppCompatActivity() {
             getString(R.string.change_split_source)
         }
         binding.chooseSplitSourceButton.isEnabled = state.areEditsEnabled
-        binding.backButton.isEnabled = state.phase !is SplitPhase.Splitting
+        binding.backButton.isEnabled = !busy
         updateCutPointRows()
 
         when (val phase = state.phase) {
@@ -366,6 +166,7 @@ class SplitActivity : AppCompatActivity() {
                 binding.splitProgressBar.progress = phase.progress
                 binding.cancelSplitButton.visibility = View.VISIBLE
             }
+            SplitPhase.Stopping -> showIndeterminateProgress(R.string.stopping_export)
             is SplitPhase.Completed -> binding.splitProgressGroup.visibility = View.GONE
             is SplitPhase.Failed -> binding.splitProgressGroup.visibility = View.GONE
         }
@@ -380,7 +181,8 @@ class SplitActivity : AppCompatActivity() {
 
     private fun handleBack() {
         when (viewModel.state.value.phase) {
-            is SplitPhase.Splitting -> stopExport(reason = null)
+            is SplitPhase.Splitting -> viewModel.stopExport()
+            SplitPhase.Stopping -> Unit
             SplitPhase.ChoosingDestination -> viewModel.cancelDestinationChoice()
             else -> finish()
         }

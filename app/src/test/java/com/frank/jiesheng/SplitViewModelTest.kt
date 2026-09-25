@@ -6,6 +6,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SplitViewModelTest {
+    @Test
+    fun `saved cut points and source restore without duplicate input values`() {
+        val saved = androidx.lifecycle.SavedStateHandle()
+        val original = SplitViewModel(saved)
+        val points = (1..20).map { "00:%02d".format(it) }
+        original.updatePoints(points)
+        original.beginSourceReading()
+        original.finishSourceReading(source)
+        val restored = SplitViewModel(saved)
+        assertEquals(points, restored.pointTexts)
+        assertEquals(source, restored.state.value.source)
+        assertTrue(restored.state.value.isExportEnabled)
+    }
+
     private val source = SelectedAudio(
         uri = "content://audio/source",
         name = "访谈.mp3",

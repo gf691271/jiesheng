@@ -7,36 +7,26 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.DocumentsContract
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.frank.jiesheng.databinding.ActivityMainBinding
 import com.frank.jiesheng.databinding.ItemAudioBinding
-import java.io.File
-import java.time.Instant
 import java.time.ZoneId
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val viewModel: MainViewModel by viewModels()
-    private lateinit var metadataReader: DocumentMetadataReader
-    private lateinit var mergeEngine: AudioMergeEngine
-    private var temporaryOutput: File? = null
-    private var targetUri: Uri? = null
-    private var targetName: String = ""
 
     private val requestMusicPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -74,7 +64,7 @@ class MainActivity : AppCompatActivity() {
         if (uri == null) {
             viewModel.cancelExport()
         } else {
-            beginMerge(uri)
+            viewModel.exportTo(applicationContext, uri)
         }
     }
 
@@ -82,8 +72,15 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        metadataReader = DocumentMetadataReader(applicationContext)
-        mergeEngine = Media3AudioMergeEngine(applicationContext)
+        if (resources.configuration.fontScale > 1.2f) {
+            binding.sourceButtons.orientation = android.widget.LinearLayout.VERTICAL
+            listOf(binding.musicLibraryButton, binding.galleryButton, binding.folderButton).forEach {
+                it.layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                )
+            }
+        }
 
         binding.musicLibraryButton.setOnClickListener { openMusicLibrary() }
         binding.galleryButton.setOnClickListener { openVideos.launch(arrayOf("video/*")) }
@@ -93,11 +90,17 @@ class MainActivity : AppCompatActivity() {
         }
         binding.mergeButton.setOnClickListener {
             if (viewModel.startExport()) {
-                targetName = ExportNames.m4a(Instant.now(), ZoneId.systemDefault())
-                createOutput.launch(targetName)
+                createOutput.launch(viewModel.targetName)
             }
         }
-        binding.cancelButton.setOnClickListener { cancelMerge() }
+        binding.cancelButton.setOnClickListener { viewModel.stopExport() }
+        onBackPressedDispatcher.addCallback(this@MainActivity) {
+            when (viewModel.state.value.phase) {
+                is MergePhase.Merging -> viewModel.stopExport()
+                MergePhase.Stopping -> Unit
+                else -> finish()
+            }
+        }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -109,11 +112,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-    }
-
-    override fun onDestroy() {
-        if (isFinishing && viewModel.state.value.phase is MergePhase.Merging) cancelMerge()
-        super.onDestroy()
     }
 
     private fun openMusicLibrary() {
@@ -139,115 +137,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun readSelectedDocuments(uris: List<Uri>, sourceType: SourceType) {
-        if (uris.isEmpty()) return
-        val existing = viewModel.state.value.queue.items.map { it.uri }.toSet()
-        val newUris = uris.distinctBy(Uri::toString).filterNot { it.toString() in existing }
-        if (!viewModel.beginSourceReading(newUris.size)) return
-        lifecycleScope.launch {
-            var completed = false
-            try {
-                val batch = withContext(Dispatchers.IO) {
-                    metadataReader.readAll(newUris, sourceType)
-                }
-                viewModel.finishSourceReading(batch.items)
-                completed = true
-                if (batch.failures.isNotEmpty()) {
-                    val details = batch.failures.joinToString("\n") { failure ->
-                        getString(R.string.read_failure_item, failure.name, failure.reason)
-                    }
-                    Toast.makeText(this@MainActivity, details, Toast.LENGTH_LONG).show()
-                }
-            } finally {
-                if (!completed) viewModel.finishSourceReading(emptyList())
-            }
-        }
-    }
-
-    private fun beginMerge(destination: Uri) {
-        targetUri = destination
-        temporaryOutput = File(cacheDir, "jiesheng-${System.nanoTime()}.m4a")
-        viewModel.beginMerge()
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        mergeEngine.merge(
-            viewModel.state.value.queue.items.map { it.uri.toUri() },
-            temporaryOutput!!,
-            object : MergeListener {
-                override fun onProgress(percent: Int) {
-                    viewModel.updateProgress(percent)
-                }
-
-                override fun onCompleted() {
-                    copyMergedFile()
-                }
-
-                override fun onError(error: Throwable) {
-                    failMerge(error.message ?: getString(R.string.read_failed))
-                }
-            },
-        )
-    }
-
-    private fun copyMergedFile() {
-        val source = temporaryOutput ?: return
-        val destination = targetUri ?: return
-        lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    contentResolver.openOutputStream(destination, "w").use { output ->
-                        requireNotNull(output) { "Output stream unavailable" }
-                        source.inputStream().use { input -> input.copyTo(output) }
-                    }
-                }
-                viewModel.finishExport(targetName)
-                Toast.makeText(
-                    this@MainActivity,
-                    getString(R.string.export_complete, targetName),
-                    Toast.LENGTH_LONG,
-                ).show()
-                clearMergeSession()
-                viewModel.cancelExport()
-            } catch (_: Exception) {
-                failMerge(getString(R.string.write_failed))
-            }
-        }
-    }
-
-    private fun failMerge(reason: String) {
-        deleteTargetDocument()
-        viewModel.failExport(reason)
-        Toast.makeText(
-            this,
-            getString(R.string.export_failed, reason),
-            Toast.LENGTH_LONG,
-        ).show()
-        clearMergeSession()
-        viewModel.cancelExport()
-    }
-
-    private fun cancelMerge() {
-        mergeEngine.cancel()
-        deleteTargetDocument()
-        clearMergeSession()
-        viewModel.cancelExport()
-    }
-
-    private fun clearMergeSession() {
-        temporaryOutput?.delete()
-        temporaryOutput = null
-        targetUri = null
-        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-    }
-
-    private fun deleteTargetDocument() {
-        val uri = targetUri ?: return
-        try {
-            DocumentsContract.deleteDocument(contentResolver, uri)
-        } catch (_: Exception) {
-            // Some document providers do not support deletion.
-        }
+        viewModel.readDocuments(applicationContext, uris, sourceType)
     }
 
     private fun render(state: MainUiState) {
+        val busy = state.phase is MergePhase.Merging || state.phase == MergePhase.Stopping
+        if (busy) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        binding.resultText.text = state.notice
+        binding.resultText.visibility = if (state.notice == null) View.GONE else View.VISIBLE
+        binding.splitAudioButton.isEnabled = state.areSourcesEnabled
+        binding.cancelButton.isEnabled = state.phase is MergePhase.Merging
         val editable = state.areQueueEditsEnabled
         binding.emptyState.visibility = if (state.queue.items.isEmpty()) View.VISIBLE else View.GONE
         binding.bindSourceAvailability(state)
@@ -286,6 +186,12 @@ class MainActivity : AppCompatActivity() {
                 binding.progressBar.isIndeterminate = false
                 binding.progressBar.progress = phase.progress
                 binding.cancelButton.visibility = View.VISIBLE
+            }
+            MergePhase.Stopping -> {
+                binding.progressGroup.visibility = View.VISIBLE
+                binding.statusText.setText(R.string.stopping_export)
+                binding.progressBar.isIndeterminate = true
+                binding.cancelButton.visibility = View.GONE
             }
             is MergePhase.Completed -> binding.progressGroup.visibility = View.GONE
             is MergePhase.Failed -> binding.progressGroup.visibility = View.GONE

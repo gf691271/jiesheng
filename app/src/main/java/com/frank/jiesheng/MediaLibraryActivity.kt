@@ -28,6 +28,9 @@ class MediaLibraryActivity : AppCompatActivity() {
         binding = ActivityMediaLibraryBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        selectedUris.addAll(savedInstanceState?.getStringArrayList("selected_uris").orEmpty())
+        val savedFolder = savedInstanceState?.getString("folder_path")
+
         binding.confirmButton.setOnClickListener { confirmSelection() }
         onBackPressedDispatcher.addCallback(
             this,
@@ -42,8 +45,17 @@ class MediaLibraryActivity : AppCompatActivity() {
             folders = withContext(Dispatchers.IO) {
                 MediaLibraryRepository(contentResolver).load()
             }
-            showFolders()
+            val validUris = folders.flatMap { it.items }.map { it.uri }.toSet()
+            selectedUris.retainAll(validUris)
+            val folder = folders.firstOrNull { it.path == savedFolder }
+            if (folder == null) showFolders() else showFolder(folder)
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("folder_path", currentFolder?.path)
+        outState.putStringArrayList("selected_uris", ArrayList(selectedUris))
+        super.onSaveInstanceState(outState)
     }
 
     private fun showFolders() {

@@ -56,6 +56,20 @@ class MediaLibraryActivityTest {
     }
 
     @Test
+    fun folderAndSelectionSurviveRecreation() {
+        ActivityScenario.launchActivityForResult<Activity>(activityIntent()).use { scenario ->
+            assertEventually(withText(folderLabel), matches(withText(folderLabel)))
+            onView(withText(folderLabel)).perform(click())
+            onView(withText(firstName)).perform(click()).check(matches(isChecked()))
+            scenario.recreate()
+            assertEventually(withText(firstName), matches(isChecked()))
+            onView(withText(secondName)).check(matches(isNotChecked()))
+            onView(withId(resourceId("confirmButton"))).perform(click())
+            assertEquals(arrayListOf(firstResultUri), scenario.result.resultData?.getStringArrayListExtra("selected_media_uris"))
+        }
+    }
+
+    @Test
     fun folderSummaryOpensFullAudioNames() {
         ActivityScenario.launch<Activity>(activityIntent()).use {
             assertEventually(withText(folderLabel), matches(withText(folderLabel)))

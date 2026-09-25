@@ -28,6 +28,64 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class SplitActivityTest {
     @Test
+    fun distinctTwoThreeAndTwentyCutPointsSurviveRecreation() {
+        for (count in listOf(2, 3, 20)) {
+            ActivityScenario.launch(SplitActivity::class.java).use { scenario ->
+                val texts = (1..count).map { "00:%02d".format(it) }
+                scenario.onActivity { activity ->
+                    repeat(count - 2) { activity.findViewById<View>(R.id.addCutPointButton).performClick() }
+                    val list = activity.findViewById<LinearLayout>(R.id.cutPointList)
+                    texts.forEachIndexed { index, text ->
+                        list.getChildAt(index).findViewById<android.widget.EditText>(R.id.cutPointInput).setText(text)
+                    }
+                }
+                scenario.recreate()
+                scenario.onActivity { activity ->
+                    val list = activity.findViewById<LinearLayout>(R.id.cutPointList)
+                    assertEquals(count, list.childCount)
+                    assertEquals(texts, (0 until count).map {
+                        list.getChildAt(it).findViewById<android.widget.EditText>(R.id.cutPointInput).text.toString()
+                    })
+                }
+            }
+        }
+    }
+
+    @Test
+    fun invalidPointsCanBeSubmittedAndShowInlineErrorsThenCorrected() {
+        Intents.init()
+        try {
+            intending(hasAction(Intent.ACTION_OPEN_DOCUMENT_TREE)).respondWith(ActivityResult(Activity.RESULT_CANCELED, null))
+            ActivityScenario.launch(SplitActivity::class.java).use { scenario ->
+                scenario.onActivity { activity ->
+                    val model = androidx.lifecycle.ViewModelProvider(activity)[SplitViewModel::class.java]
+                    model.beginSourceReading()
+                    model.finishSourceReading(SelectedAudio("content://test/source", "test.wav", 12_000, "WAV", SourceType.AUDIO, null))
+                }
+                androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+                for (points in listOf(listOf("00:00", "00:08"), listOf("00:04", "00:04"), listOf("00:12", "00:08"), listOf("4", "00:08"))) {
+                    scenario.onActivity { activity ->
+                        val list = activity.findViewById<LinearLayout>(R.id.cutPointList)
+                        points.forEachIndexed { index, text -> list.getChildAt(index).findViewById<android.widget.EditText>(R.id.cutPointInput).setText(text) }
+                        val button = activity.findViewById<View>(R.id.splitExportButton)
+                        assertTrue(button.isEnabled)
+                        button.performClick()
+                        assertTrue(list.getChildAt(0).findViewById<android.widget.EditText>(R.id.cutPointInput).error != null)
+                        assertEquals(points[0], list.getChildAt(0).findViewById<android.widget.EditText>(R.id.cutPointInput).text.toString())
+                    }
+                }
+                scenario.onActivity { activity ->
+                    val list = activity.findViewById<LinearLayout>(R.id.cutPointList)
+                    list.getChildAt(0).findViewById<android.widget.EditText>(R.id.cutPointInput).setText("00:04")
+                    assertEquals(null, list.getChildAt(0).findViewById<android.widget.EditText>(R.id.cutPointInput).error)
+                    activity.findViewById<View>(R.id.splitExportButton).performClick()
+                }
+                assertTrue(Intents.getIntents().any { it.action == Intent.ACTION_OPEN_DOCUMENT_TREE })
+            }
+        } finally { Intents.release() }
+    }
+
+    @Test
     fun splitScreenStartsWithTwoCutPointRowsAndDisabledExport() {
         ActivityScenario.launch(SplitActivity::class.java).use { scenario ->
             onView(withText("把一段声音，拆成几段")).check(matches(isDisplayed()))
